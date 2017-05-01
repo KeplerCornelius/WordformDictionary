@@ -19,8 +19,6 @@ namespace WordformDictionary
     private Dictionary<string, string> _wordformsToKeyword;
     private Dictionary<string, HashSet<string>> _keywordToWordforms;
 
-    private byte _fileVersion = 1;
-
     public WordformDictionary()
     {
       _wordformsToKeyword = new Dictionary<string, string>();
@@ -200,7 +198,7 @@ namespace WordformDictionary
 
     private void DefaultSaver(Stream stream, params dynamic[] args)
     {
-      var signature = new byte[] { 87, 70, 68, _fileVersion }; //WFD*, где * - номер версии словаря
+      var signature = new byte[] { 87, 70, 68, 49 };
 
       using (BinaryWriter writer = new BinaryWriter(stream))
       {
