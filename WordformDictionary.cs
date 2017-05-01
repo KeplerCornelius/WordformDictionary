@@ -8,8 +8,28 @@ namespace WordformDictionary
 {
   public class WordformDictionary
   {
-    public delegate ICollection<Tuple<string, HashSet<string>>> Loader(Stream stream, params dynamic[] args);
+    /// <summary>
+    /// Метод для загрузки словаря из файла
+    /// </summary>
+    /// <param name="stream">Поток данных</param>
+    /// <param name="args"></param>
+    /// <returns></returns>
+    public delegate Dictionary<string, HashSet<string>> Loader(Stream stream, params dynamic[] args);
+
+    /// <summary>
+    /// Метод для сохранения словаря в файл
+    /// </summary>
+    /// <param name="stream">Принимающий поток данных</param>
+    /// <param name="wordDictionary">Словарь ключевых слов и их словоформ</param>
+    /// <param name="args"></param>
     public delegate void Saver(Stream stream, Dictionary<string, HashSet<string>> wordDictionary, params dynamic[] args);
+    
+    /// <summary>
+    /// Метод для обработки строк перед помещением в словарь
+    /// </summary>
+    /// <param name="input"></param>
+    /// <param name="args"></param>
+    /// <returns></returns>
     public delegate string WordProcessor(string input, params dynamic[] args);
 
     public Loader CurrentLoader;
@@ -23,9 +43,20 @@ namespace WordformDictionary
     {
       _wordformsToKeyword = new Dictionary<string, string>();
       _keywordToWordforms = new Dictionary<string, HashSet<string>>();
+
+      SedDefaultLoader();
+      SetDefaultSaver();
+      SetDefaultWordProcessor();
     }
 
-    public void LoadDictionary(string filename, bool append, params dynamic[] args)
+    /// <summary>
+    /// Загружает словарь из файла
+    /// </summary>
+    /// <param name="filename">Имя файла</param>
+    /// <param name="append">Добавить прочитанные слова к уже имеющимся в словаре</param>
+    /// <param name="skipProcessing">Не обрабатывать прочитанные данные (быстрее, но небезопасно)</param>
+    /// <param name="args"></param>
+    public void LoadDictionary(string filename, bool append, bool skipProcessing, params dynamic[] args)
     {
       if (CurrentLoader != null)
       {
@@ -42,16 +73,30 @@ namespace WordformDictionary
             }
 
             fileStream.Position = 0;
-            var result = CurrentLoader(fileStream, args);
+            var dictionary = CurrentLoader(fileStream, args);
 
-            if (result != null)
+            if (dictionary != null)
             {
-              foreach (var item in result)
-              {
-                var keyword = item.Item1;
-                var wordforms = item.Item2;
+              var records = dictionary.GetEnumerator();
 
-                Append(keyword, wordforms);
+              if (skipProcessing)
+              {
+                while (records.MoveNext())
+                {
+                  _keywordToWordforms.Add(records.Current.Key, records.Current.Value);
+
+                  foreach (var wordform in records.Current.Value)
+                  {
+                    _wordformsToKeyword.Add(wordform, records.Current.Key);
+                  }
+                }
+              }
+              else
+              {
+                while (records.MoveNext())
+                {
+                  Append(records.Current.Key, records.Current.Value);
+                }
               }
             }
           }
@@ -67,6 +112,11 @@ namespace WordformDictionary
       }
     }
 
+    /// <summary>
+    /// Добавить слово и его словоформы в словарь
+    /// </summary>
+    /// <param name="keyword">Слово</param>
+    /// <param name="wordforms">Словоформы</param>
     public void Append(string keyword, HashSet<string> wordforms)
     {
       if (CurrentWordProcessor != null)
@@ -109,6 +159,10 @@ namespace WordformDictionary
       }
     }
 
+    /// <summary>
+    /// Удалить слово и его словоформы из словаря
+    /// </summary>
+    /// <param name="keyword">Слово</param>
     public void Remove(string keyword)
     {
       var keywordProcessed = CurrentWordProcessor(keyword);
@@ -125,6 +179,11 @@ namespace WordformDictionary
       }
     }
 
+    /// <summary>
+    /// Получить все словоформы данного слова
+    /// </summary>
+    /// <param name="keyword">Слово</param>
+    /// <returns>Копия набора словоформ</returns>
     public HashSet<string> GetWordforms(string keyword)
     {
       var keywordProcessed = CurrentWordProcessor(keyword);
@@ -162,9 +221,24 @@ namespace WordformDictionary
       }
     }
 
-    private ICollection<Tuple<string, HashSet<string>>> DefaultLoader(Stream stream, params dynamic[] args)
+    public void SedDefaultLoader()
     {
-      var wordformCollection = new List<Tuple<string, HashSet<string>>>();
+      CurrentLoader = DefaultLoader;
+    }
+
+    public void SetDefaultSaver()
+    {
+      CurrentSaver = DefaultSaver;
+    }
+
+    public void SetDefaultWordProcessor()
+    {
+      CurrentWordProcessor = DefaultWordProcessor;
+    }
+
+    private Dictionary<string, HashSet<string>> DefaultLoader(Stream stream, params dynamic[] args)
+    {
+      var wordformDictionary = new Dictionary<string, HashSet<string>>();
 
       using (BinaryReader reader = new BinaryReader(stream))
       {
@@ -174,7 +248,7 @@ namespace WordformDictionary
           signature[0] == 87 &&
           signature[1] == 70 &&
           signature[2] == 68 &&
-          signature[3] == 49)
+          signature[3] == 49) //WFD1
         {
           while (reader.BaseStream.Position < reader.BaseStream.Length)
           {
@@ -188,15 +262,29 @@ namespace WordformDictionary
               wordforms.Add(wordform);
             }
 
-            wordformCollection.Add(new Tuple<string, HashSet<string>>(keyword, wordforms));
+            HashSet<string> oldWordforms;
+            if (wordformDictionary.TryGetValue(keyword, out oldWordforms))
+            {
+              foreach (var wordform in wordforms)
+              {
+                if (!oldWordforms.Contains(wordform))
+                {
+                  oldWordforms.Add(wordform);
+                }
+              }
+            }
+            else
+            {
+              wordformDictionary.Add(keyword, wordforms);
+            }
           }
         }
       }
 
-      return wordformCollection;
+      return wordformDictionary;
     }
 
-    private void DefaultSaver(Stream stream, params dynamic[] args)
+    private void DefaultSaver(Stream stream, Dictionary<string, HashSet<string>> dictionary, params dynamic[] args)
     {
       var signature = new byte[] { 87, 70, 68, 49 };
 
@@ -207,7 +295,7 @@ namespace WordformDictionary
 
         writer.Write(signature);
 
-        var keys = _keywordToWordforms.Keys.GetEnumerator();
+        var keys = dictionary.Keys.GetEnumerator();
 
         while (keys.MoveNext())
         {
