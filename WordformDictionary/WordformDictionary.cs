@@ -64,15 +64,12 @@ namespace WordformDictionary
         {
           using (FileStream fileStream = new FileStream(filename, FileMode.Open))
           {
-            fileStream.Position = 0;
-
             if (!append)
             {
               _wordformsToKeyword.Clear();
               _keywordToWordforms.Clear();
             }
 
-            fileStream.Position = 0;
             var dictionary = CurrentLoader(fileStream, args);
 
             if (dictionary != null)
@@ -83,11 +80,14 @@ namespace WordformDictionary
               {
                 while (records.MoveNext())
                 {
-                  _keywordToWordforms.Add(records.Current.Key, records.Current.Value);
+                  var keyword = records.Current.Key;
+                  var wordforms = records.Current.Value;
 
-                  foreach (var wordform in records.Current.Value)
+                  _keywordToWordforms.Add(keyword, wordforms);
+
+                  foreach (var wordform in wordforms)
                   {
-                    _wordformsToKeyword.Add(wordform, records.Current.Key);
+                    _wordformsToKeyword.Add(wordform, keyword);
                   }
                 }
               }
@@ -95,7 +95,10 @@ namespace WordformDictionary
               {
                 while (records.MoveNext())
                 {
-                  Append(records.Current.Key, records.Current.Value);
+                  var keyword = records.Current.Key;
+                  var wordforms = records.Current.Value;
+
+                  Append(keyword, wordforms);
                 }
               }
             }
@@ -165,17 +168,20 @@ namespace WordformDictionary
     /// <param name="keyword">Слово</param>
     public void Remove(string keyword)
     {
-      var keywordProcessed = CurrentWordProcessor(keyword);
-
-      HashSet<string> wordforms;
-      if (_keywordToWordforms.TryGetValue(keywordProcessed, out wordforms))
+      if (CurrentWordProcessor != null)
       {
-        foreach (var wordform in wordforms)
-        {
-          _wordformsToKeyword.Remove(wordform);
-        }
+        var keywordProcessed = CurrentWordProcessor(keyword);
 
-        _keywordToWordforms.Remove(keywordProcessed);
+        HashSet<string> wordforms;
+        if (_keywordToWordforms.TryGetValue(keywordProcessed, out wordforms))
+        {
+          foreach (var wordform in wordforms)
+          {
+            _wordformsToKeyword.Remove(wordform);
+          }
+
+          _keywordToWordforms.Remove(keywordProcessed);
+        }
       }
     }
 
@@ -203,38 +209,40 @@ namespace WordformDictionary
     /// <returns>Копия набора словоформ</returns>
     public HashSet<string> GetWordforms(string keyword)
     {
-      var keywordProcessed = CurrentWordProcessor(keyword);
+      if (CurrentWordProcessor != null)
+      {
+        var keywordProcessed = CurrentWordProcessor(keyword);
 
-      if (_keywordToWordforms.ContainsKey(keywordProcessed))
-      {
-        return new HashSet<string>(_keywordToWordforms[keywordProcessed]);
+        if (_keywordToWordforms.ContainsKey(keywordProcessed))
+        {
+          return new HashSet<string>(_keywordToWordforms[keywordProcessed]);
+        }
       }
-      else
-      {
-        return null;
-      }
+
+      return null;
     }
 
     public string this[string Wordform]
     {
       get
       {
-        var wordformProcessed = CurrentWordProcessor(Wordform);
+        if (CurrentWordProcessor != null)
+        {
+          var wordformProcessed = CurrentWordProcessor(Wordform);
 
-        string keyword;
+          string keyword;
 
-        if (_keywordToWordforms.ContainsKey(wordformProcessed))
-        {
-          return wordformProcessed;
+          if (_keywordToWordforms.ContainsKey(wordformProcessed))
+          {
+            return wordformProcessed;
+          }
+          else if (_wordformsToKeyword.TryGetValue(wordformProcessed, out keyword))
+          {
+            return keyword;
+          }
         }
-        if (_wordformsToKeyword.TryGetValue(wordformProcessed, out keyword))
-        {
-          return keyword;
-        }
-        else
-        {
-          return null;
-        }
+
+        return null;
       }
     }
 
@@ -259,6 +267,8 @@ namespace WordformDictionary
 
       using (BinaryReader reader = new BinaryReader(stream))
       {
+        stream.Position = 0;
+
         var signature = reader.ReadBytes(4);
 
         if (
@@ -303,21 +313,20 @@ namespace WordformDictionary
 
     private void DefaultSaver(Stream stream, Dictionary<string, HashSet<string>> dictionary, params dynamic[] args)
     {
-      var signature = new byte[] { 87, 70, 68, 49 };
+      var signature = new byte[] { 87, 70, 68, 49 }; //WFD1
 
       using (BinaryWriter writer = new BinaryWriter(stream))
       {
-        stream.Position = 0;
         stream.SetLength(0);
 
         writer.Write(signature);
 
-        var keys = dictionary.Keys.GetEnumerator();
+        var records = dictionary.GetEnumerator();
 
-        while (keys.MoveNext())
+        while (records.MoveNext())
         {
-          var key = keys.Current;
-          var wordforms = _keywordToWordforms[key];
+          var key = records.Current.Key;
+          var wordforms = records.Current.Value;
           var wordformsAmont = wordforms.Count;
 
           writer.Write(key);
