@@ -1,0 +1,5 @@
+E:\Work\code\WordformDictionary\bin\Debug\WordformDictionary.dll
+E:\Work\code\WordformDictionary\bin\Debug\WordformDictionary.pdb
+E:\Work\code\WordformDictionary\obj\Debug\WordformDictionary.csprojResolveAssemblyReference.cache
+E:\Work\code\WordformDictionary\obj\Debug\WordformDictionary.dll
+E:\Work\code\WordformDictionary\obj\Debug\WordformDictionary.pdb
