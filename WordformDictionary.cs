@@ -180,6 +180,23 @@ namespace WordformDictionary
     }
 
     /// <summary>
+    /// Получить все ключевые слова
+    /// </summary>
+    /// <returns>Копия набора ключевых слов</returns>
+    public HashSet<string> GetKeywords()
+    {
+      var keys = _keywordToWordforms.Keys.GetEnumerator();
+      var result = new HashSet<string>();
+
+      while (keys.MoveNext())
+      {
+        result.Add(keys.Current);
+      }
+
+      return result;
+    }
+
+    /// <summary>
     /// Получить все словоформы данного слова
     /// </summary>
     /// <param name="keyword">Слово</param>
