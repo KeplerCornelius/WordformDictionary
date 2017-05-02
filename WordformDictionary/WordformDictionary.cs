@@ -50,12 +50,12 @@ namespace WordformDictionary
     }
 
     /// <summary>
-    /// Загружает словарь из файла
+    /// Загрузить словарь из файла
     /// </summary>
     /// <param name="filename">Имя файла</param>
     /// <param name="append">Добавить прочитанные слова к уже имеющимся в словаре</param>
-    /// <param name="skipProcessing">Не обрабатывать прочитанные данные (быстрее, но небезопасно)</param>
-    /// <param name="args"></param>
+    /// <param name="skipProcessing">Не обрабатывать прочитанные данные (быстрее, но небезопасно с точки зрения сравнения строк)</param>
+    /// <param name="args">Параметры делегата</param>
     public void LoadDictionary(string filename, bool append, bool skipProcessing, params dynamic[] args)
     {
       if (CurrentLoader != null)
@@ -107,6 +107,11 @@ namespace WordformDictionary
       }
     }
 
+    /// <summary>
+    /// Сохранить словарь в файл
+    /// </summary>
+    /// <param name="filename">Имя файла</param>
+    /// <param name="args">Параметры делегата</param>
     public void SaveDictionary(string filename, params dynamic[] args)
     {
       using (FileStream fileStream = new FileStream(filename, FileMode.OpenOrCreate))
@@ -119,45 +124,40 @@ namespace WordformDictionary
     /// Добавить слово и его словоформы в словарь
     /// </summary>
     /// <param name="keyword">Слово</param>
-    /// <param name="wordforms">Словоформы</param>
-    public void Append(string keyword, HashSet<string> wordforms)
+    /// <param name="newWordforms">Словоформы</param>
+    public void Append(string keyword, HashSet<string> newWordforms)
     {
       if (CurrentWordProcessor != null)
       {
         var keywordProcessed = CurrentWordProcessor(keyword);
 
-        HashSet<string> oldWordforms;
-        if (_keywordToWordforms.TryGetValue(keywordProcessed, out oldWordforms))
+        if (_keywordToWordforms.TryGetValue(keywordProcessed, out var wordforms))
         {
-          foreach (string wordform in wordforms)
+          foreach (string newWordform in newWordforms)
           {
-            var wordformProcessed = CurrentWordProcessor(wordform);
-            if (!oldWordforms.Contains(wordformProcessed))
+            var wordform = CurrentWordProcessor(newWordform);
+            if (!wordforms.Contains(wordform))
             {
-              _wordformsToKeyword.Add(wordformProcessed, keywordProcessed);
-              oldWordforms.Add(wordformProcessed);
+              _wordformsToKeyword.Add(wordform, keywordProcessed);
+              wordforms.Add(wordform);
             }
           }
         }
         else
         {
-          var newWordforms = new HashSet<string>();
-          foreach (var wordform in wordforms)
+          wordforms = new HashSet<string>();
+          foreach (var newWordform in newWordforms)
           {
-            var wordformProcessed = CurrentWordProcessor(wordform);
+            var wordform = CurrentWordProcessor(newWordform);
 
-            if (!newWordforms.Contains(wordformProcessed))
+            if (!wordforms.Contains(wordform))
             {
-              newWordforms.Add(wordformProcessed);
+              _wordformsToKeyword.Add(wordform, keywordProcessed);
+              wordforms.Add(wordform);
             }
           }
 
-          _keywordToWordforms.Add(keywordProcessed, newWordforms);
-
-          foreach (string newWordform in newWordforms)
-          {
-            _wordformsToKeyword.Add(newWordform, keywordProcessed);
-          }
+          _keywordToWordforms.Add(keywordProcessed, wordforms);
         }
       }
     }
@@ -166,7 +166,7 @@ namespace WordformDictionary
     /// Удалить слово и его словоформы из словаря
     /// </summary>
     /// <param name="keyword">Слово</param>
-    public void Remove(string keyword)
+    public void RemoveKeyword(string keyword)
     {
       if (CurrentWordProcessor != null)
       {
@@ -182,6 +182,23 @@ namespace WordformDictionary
 
           _keywordToWordforms.Remove(keywordProcessed);
         }
+      }
+    }
+
+    /// <summary>
+    /// Удалить словоформу слова
+    /// </summary>
+    /// <param name="keyword">Слово</param>
+    /// <param name="wordform">Словоформа</param>
+    public void RemoveWordform(string keyword, string wordform)
+    {
+      var keywordProcessed = CurrentWordProcessor(keyword);
+      var wordformProcessed = CurrentWordProcessor(wordform);
+
+      if (_keywordToWordforms.TryGetValue(keywordProcessed, out var wordforms))
+      {
+        wordforms.Remove(wordformProcessed);
+        _wordformsToKeyword.Remove(wordformProcessed);
       }
     }
 
